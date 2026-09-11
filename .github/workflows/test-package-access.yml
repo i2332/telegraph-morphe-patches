@@ -49,6 +49,7 @@ jobs:
           python3 <<'PY'
           import json
           import pathlib
+          import re
           import sys
 
           root = pathlib.Path('.')
@@ -149,12 +150,41 @@ jobs:
               print('::error::PATCHES.md does not start with the expected generated header.')
               sys.exit(1)
 
-          # The generator's Markdown summary includes the total patch count; validate that count rather
-          # than requiring Telegraph package/version/versionCode tokens that are not emitted here.
-          expected_patch_count = len(patches)
-          if f'**{expected_patch_count} patches**' not in patches_md_text:
+          # PATCHES.md is generated from patches-list.json. Validate it against the actual emitted layout:
+          # one Telegraph/Graph Messenger app section and a real generated patch-count summary.
+          app_sections = re.findall(r'^##\s+(.+?)\s+\(([^)]+)\)$', patches_md_text, flags=re.MULTILINE)
+          if len(app_sections) != 1:
+              print(f'::error::PATCHES.md must contain exactly one generated app section, found {len(app_sections)}.')
+              sys.exit(1)
+
+          app_name, package_name = app_sections[0]
+          if app_name != 'Graph Messenger' or package_name != 'ir.ilmili.telegraph':
               print(
-                  f'::error::PATCHES.md does not contain the expected generated patch count summary: {expected_patch_count} patches.'
+                  f'::error::PATCHES.md app section must be exactly "Graph Messenger (ir.ilmili.telegraph)"; found "{app_name} ({package_name})".'
+              )
+              sys.exit(1)
+
+          expected_patch_count = telegram_patch_count = len(
+              [
+                  p
+                  for p in patches
+                  if any(
+                      cp and cp.get('packageName') == 'ir.ilmili.telegraph'
+                      for cp in (p.get('compatiblePackages') or [])
+                  )
+              ]
+          )
+
+          if not re.search(rf'\b{expected_patch_count}\s+patches\b', patches_md_text):
+              print(
+                  f'::error::PATCHES.md does not contain the expected generated patch count summary for {expected_patch_count} patches.'
+              )
+              sys.exit(1)
+
+          patch_rows = re.findall(r'^\| \*\*.+?\*\* \|', patches_md_text, flags=re.MULTILINE)
+          if len(patch_rows) != expected_patch_count:
+              print(
+                  f'::error::PATCHES.md patch-row count ({len(patch_rows)}) does not match the Telegraph patch count ({expected_patch_count}).'
               )
               sys.exit(1)
 
