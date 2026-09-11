@@ -1,4 +1,40 @@
-## Available patches
+# Patches
 
-<!-- PATCHES_START -->
-<!-- PATCHES_END -->
+> Generated from `patches-list.json` — **v1.21.5** (`main`) · **21 patches** across **1 apps** · back to [README](README.md)
+
+---
+
+## Graph Messenger (ir.ilmili.telegraph)
+
+**Supported versions:** `12.10.1.0`
+
+| Patch | Details |
+|---|---|
+| **Anti-delete messages** | Prevents messages deleted by other users from being removed locally. |
+| **Anti-disappearing media** | Keeps view-once photos, videos and voice messages viewable indefinitely. |
+| **Anti-screenshot notification** | Blocks screenshot notifications from being sent to the other user. |
+| **Bypass channel restrictions** | Allows opening, viewing, saving and forwarding content from restricted, sensitive, and copyright-restricted channels. |
+| **Bypass content restrictions** | Allows saving and forwarding content from restricted channels, chats, and users. |
+| **Bypass integrity check** | Spoofs certificate fingerprint and SafetyNet results so login works on patched APK. |
+| **Disable auto-update** | Disables automatic app update checks, the blocking update screen, and the proxy sponsor channel insertion. On Telegram Plus also disables the Plus-specific updater and update settings flag. |
+| **Disable channel switching** | Disables the pull-down gesture that switches to the next unread channel. |
+| **Download speed boost** | Increases download chunk size to 1 MB and max concurrent requests to 12. |
+| **Hide typing indicator** | Hides your typing indicator from other users in all chats. On Telegram Plus also silences the controller-level sendTyping dispatcher. |
+| **Remove ads** | Removes sponsored messages and video ads from all chats and channels. On Telegram Plus also blocks native banner and inline ads. |
+| **Unlock Premium** | Unlocks Telegram Premium features for the current account. |
+| **Use normal paste** | Skips Telegram's Rich HTML paste handler and falls back to the normal paste path. |
+| **Voice to music** | Plays voice notes in the full music player with seek bar and background playback. |
+
+---
+
+## Universal
+
+| Patch | Details |
+|---|---|
+| **Disable PairIP license check** | Disables PairIP license verification, VM checks, and repeated background checks. |
+| **Fix Firebase after re-signing** | Fixes Firebase services (push notifications, Remote Config, Firebase Auth) that break after Morphe re-signs the app with a different certificate. Apply with Original app certificate patch — no other config needed. |
+| **GmsCore support (MicroG)** | Routes Google Play Services calls through MicroG instead of real GPS. Works for: Google apps (YouTube, Maps, News, Photos) and third-party apps using classic Google Sign-In (Android 13 and below). Does not work for: Android 14+ Credential Manager sign-in (most modern third-party apps), Play Integrity / SafetyNet checks, or apps with custom auth. Requires MicroG RE installed. Apply with Original app certificate patch.<br><sub>Options: MicroG package name, Main activity class (optional), Custom package name (optional)</sub> |
+| **Provide Original app certificate** | Automatically reads the signing certificate from the APK you are patching — no original app installed or file provided needed. Only fill the options below if you are patching an APK that was already re-signed (e.g. a previously patched build): in that case point to the original APK file, or enter the certificate manually.<br><sub>Options: Path to original APK (if uninstalled), Certificate SHA-1 (manual), Certificate SHA-256 (manual), +1 more</sub> |
+| **Spoof Widevine / DRM level** | Reports Widevine L1 (hardware DRM) to apps that check DRM level locally. Useful for apps that refuse to play HD/4K content on L3 devices or after re-signing. Does not bypass server-side DRM - Netflix, Disney+ and similar are not affected.<br><sub>Options: Widevine security level to report, HDCP level to report</sub> |
+| **Spoof app signature** | Makes the app think its signing certificate is unchanged after Morphe re-signs it. Useful when an app crashes or shows a tamper warning because it checks its own certificate. Does not bypass Play Integrity / SafetyNet hardware attestation. Apply with Original app certificate patch.<br><sub>Options: Package name override (optional)</sub> |
+| **Spoof install source** | Makes the app think it was installed from a specific store (default: Google Play). Useful when an app blocks features or shows errors because it detects it was not installed from the Play Store. Only affects what the app itself sees - does not change the real system install record.<br><sub>Options: Store to impersonate</sub> |
