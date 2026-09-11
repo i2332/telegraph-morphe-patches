@@ -73,9 +73,13 @@ jobs:
 
           all_compatible_packages = []
           for patch in patches:
-              all_compatible_packages.extend(patch.get('compatiblePackages', []))
+              compatible_packages = patch.get('compatiblePackages') or []
+              if not isinstance(compatible_packages, list):
+                  print(f'::error::Patch {patch.get("name", "<unknown>")} has incompatible compatiblePackages value: {compatible_packages!r}')
+                  sys.exit(1)
+              all_compatible_packages.extend(compatible_packages)
 
-          unique_packages = sorted({cp.get('packageName') for cp in all_compatible_packages if cp.get('packageName')})
+          unique_packages = sorted({cp.get('packageName') for cp in all_compatible_packages if cp and cp.get('packageName')})
 
           print(f'Generated unique package names: {unique_packages}')
 
@@ -94,13 +98,17 @@ jobs:
               print(f'::error::Unexpected target compatibility packages remain in generated metadata: {bad}')
               sys.exit(1)
 
-          telegraph_entries = [cp for cp in all_compatible_packages if cp.get('packageName') == 'ir.ilmili.telegraph']
+          telegraph_entries = [cp for cp in all_compatible_packages if cp and cp.get('packageName') == 'ir.ilmili.telegraph']
           if not telegraph_entries:
               print('::error::No Telegraph target compatibility entries were found in patches-list.json.')
               sys.exit(1)
 
           expected_version = '12.10.1.0'
           expected_version_code = 70382
+
+          print(f'Telegraph package = {telegraph_entries[0].get("packageName")}')
+          print(f'Telegraph version = {expected_version}')
+          print(f'Telegraph versionCode = {expected_version_code}')
 
           for cp in telegraph_entries:
               targets = cp.get('targets', [])
@@ -148,10 +156,17 @@ jobs:
 
           # Count final Telegraph patches.
           telegram_patch_count = len(
-              [p for p in patches if any(cp.get('packageName') == 'ir.ilmili.telegraph' for cp in p.get('compatiblePackages', []))]
+              [
+                  p
+                  for p in patches
+                  if any(
+                      cp and cp.get('packageName') == 'ir.ilmili.telegraph'
+                      for cp in (p.get('compatiblePackages') or [])
+                  )
+              ]
           )
 
-          print(f'Final Telegram patch count: {telegram_patch_count}')
+          print(f'Final Telegram/Telegraph patch count: {telegram_patch_count}')
           print('All required Telegraph target compatibility validations passed.')
           PY
 
