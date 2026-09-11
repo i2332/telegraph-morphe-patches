@@ -1,0 +1,54 @@
+name: Regenerate PATCHES.md
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Regenerate PATCHES.md
+        run: |
+          python .github/scripts/generate_patches_readme.py
+
+      - name: Show generated file
+        run: |
+          echo "===== PATCHES.md ====="
+          head -40 PATCHES.md
+
+      - name: Validate old apps are gone
+        run: |
+          if grep -Eiq \
+            '1\.1\.1\.1|1Tap Cleaner|AAAD|AAEnabler|AccuBattery|AccuWeather|Ace Ex File Manager|AdGuard|Adobe Acrobat|Adobe Scan|AIDA64|AiScore|All Reader|com\.cloudflare\.onedotonedotonedotone' \
+            PATCHES.md; then
+            echo "ERROR: Old upstream apps are still present in PATCHES.md"
+            exit 1
+          fi
+
+          echo "Old upstream apps are not present."
+
+      - name: Commit generated PATCHES.md
+        run: |
+          if git diff --quiet -- PATCHES.md; then
+            echo "PATCHES.md is already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add PATCHES.md
+          git commit -m "docs: regenerate Telegraph patches list"
+          git push
