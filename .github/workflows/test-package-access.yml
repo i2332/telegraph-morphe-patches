@@ -151,10 +151,10 @@ jobs:
               sys.exit(1)
 
           # PATCHES.md is generated from patches-list.json. Validate the actual emitted layout:
-          # exactly one app section for Graph Messenger (ir.ilmili.telegraph), and the number of
-          # patch rows in that generated markdown must match the Telegraph-only patches extracted
-          # from patches-list.json. The README summary line is not package-specific and therefore
-          # does not encode the Telegraph-only count.
+          # exactly one app section for Graph Messenger (ir.ilmili.telegraph), and the list of
+          # patch names that appear in that generated markdown must exactly match the Telegraph
+          # patches extracted from patches-list.json. The README summary line is not enough,
+          # because it is not package-specific and is not a reliable Telegraph-only assertion.
           app_sections = re.findall(r'^##\s+(.+?)\s+\(([^)]+)\)$', patches_md_text, flags=re.MULTILINE)
           if len(app_sections) != 1:
               print(f'::error::PATCHES.md must contain exactly one generated app section, found {len(app_sections)}.')
@@ -167,21 +167,25 @@ jobs:
               )
               sys.exit(1)
 
-          telegraph_patch_count = len(
-              [
-                  p
+          telegraph_patch_names = sorted(
+              {
+                  p['name']
                   for p in patches
                   if any(
                       cp and cp.get('packageName') == 'ir.ilmili.telegraph'
                       for cp in (p.get('compatiblePackages') or [])
                   )
-              ]
+              }
           )
 
-          patch_rows = re.findall(r'^\| \*\*.+?\*\* \|', patches_md_text, flags=re.MULTILINE)
-          if len(patch_rows) != telegraph_patch_count:
+          patches_md_patch_names = sorted({m.group(1) for m in re.finditer(r'^\| \*\*(.+?)\*\* \|', patches_md_text, flags=re.MULTILINE)})
+
+          if patches_md_patch_names != telegraph_patch_names:
+              missing = sorted(set(telegraph_patch_names) - set(patches_md_patch_names))
+              extra = sorted(set(patches_md_patch_names) - set(telegraph_patch_names))
               print(
-                  f'::error::PATCHES.md patch-row count ({len(patch_rows)}) does not match the Telegraph patch count ({telegraph_patch_count}).'
+                  '::error::PATCHES.md patch identities do not match Telegraph patches from patches-list.json. '
+                  f'Missing from PATCHES.md: {missing}. Extra in PATCHES.md: {extra}.'
               )
               sys.exit(1)
 
@@ -217,21 +221,11 @@ jobs:
           fi
           echo 'Generated artifacts changed as expected.'
 
-      - name: Commit generated artifacts and source updates
+      - name: Skip commit/push until final manual approval
         run: |
-          git config user.name "smhmn2332"
-          git config user.email "smhmn2332@gmail.com"
-          git add patches-list.json PATCHES.md patches-bundle.json SHA256SUMS.txt patches/src/main/kotlin/app/template/patches/shared/Constants.kt
-          if git diff --cached --quiet; then
-            echo '::error::No staged changes were available to commit.'
-            exit 1
-          fi
-          git commit -m "chore: regenerate telegraph patch metadata"
-          git push origin HEAD:main
+          echo 'Validation-only workflow run completed successfully.'
+          echo 'Skipping commit/push and temporary workflow cleanup until the run is approved manually.'
 
-      - name: Remove temporary workflow file after successful publish
-        if: success()
+      - name: Skip temporary workflow cleanup until final manual approval
         run: |
-          git rm -f .github/workflows/test-package-access.yml || true
-          git commit -am "chore: remove temporary generation workflow" || true
-          git push origin HEAD:main || true
+          echo 'Skipping temporary workflow removal for now so the validation-only workflow remains available for reruns.'
