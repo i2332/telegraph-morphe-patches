@@ -187,11 +187,23 @@ jobs:
           fi
           echo 'Generated artifacts changed as expected.'
 
-      - name: Skip commit/push until final manual approval
+      - name: Commit generated artifacts
         run: |
-          echo 'Validation-only workflow run completed successfully.'
-          echo 'Skipping commit/push and temporary workflow cleanup until the run is approved manually.'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Skip temporary workflow cleanup until final manual approval
+          git add patches-list.json PATCHES.md patches-bundle.json SHA256SUMS.txt
+
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+          else
+            git commit -m "chore: update generated Telegraph patches"
+            git push origin HEAD:main
+          fi
+
+      - name: Remove temporary workflow
         run: |
-          echo 'Skipping temporary workflow removal for now so the validation-only workflow remains available for reruns.'
+          rm .github/workflows/test-package-access.yml
+          git add .github/workflows/test-package-access.yml
+          git commit -m "chore: remove temporary validation workflow"
+          git push origin HEAD:main
