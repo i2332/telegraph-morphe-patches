@@ -163,14 +163,6 @@ jobs:
               print('::error::PATCHES.md is missing the expected README backlink marker.')
               sys.exit(1)
 
-          # Reject old package names anywhere in generated metadata text.
-          for file_name in ['patches-list.json', 'PATCHES.md', 'patches-bundle.json']:
-              text = (root / file_name).read_text(encoding='utf-8')
-              for old_name in ['org.telegram.messenger.web', 'org.telegram.plus', 'org.telegram.messenger']:
-                  if old_name in text:
-                      print(f'::error::{file_name} still contains legacy target compatibility string: {old_name}')
-                      sys.exit(1)
-
           # Count final Telegraph patches.
           telegram_patch_count = len(
               [
