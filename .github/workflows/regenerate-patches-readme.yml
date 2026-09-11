@@ -21,12 +21,17 @@ jobs:
 
       - name: Regenerate PATCHES.md
         run: |
-          python .github/scripts/generate_patches_readme.py
+          python .github/scripts/generate_patches_readme.py \
+            i2332/telegraph-morphe-patches \
+            main \
+            patches-list.json \
+            README.md \
+            PATCHES.md
 
       - name: Show generated file
         run: |
           echo "===== PATCHES.md ====="
-          head -40 PATCHES.md
+          head -60 PATCHES.md
 
       - name: Validate old apps are gone
         run: |
@@ -38,6 +43,11 @@ jobs:
           fi
 
           echo "Old upstream apps are not present."
+
+      - name: Show changes
+        run: |
+          git diff --stat
+          git diff -- PATCHES.md
 
       - name: Commit generated PATCHES.md
         run: |
