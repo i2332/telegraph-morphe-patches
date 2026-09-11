@@ -132,19 +132,31 @@ jobs:
                       print(f'::error::Unexpected versionCode values for Telegraph target: {bad_codes}')
                       sys.exit(1)
 
-          # Validate generated text files contain the exact current Telegraph target metadata.
-          file_text_checks = {
-              'PATCHES.md': ['ir.ilmili.telegraph', '12.10.1.0', '70382'],
-              'patches-list.json': ['ir.ilmili.telegraph', '12.10.1.0', '70382'],
-              'patches-bundle.json': ['ir.ilmili.telegraph', '12.10.1.0', '70382'],
-          }
+          # Validate generated text files using each file's actual schema/content.
+          # patches-list.json is the authoritative source for package/version/versionCode metadata.
+          if not isinstance(data.get('version'), str) or not data['version']:
+              print('::error::patches-list.json is missing a valid version field.')
+              sys.exit(1)
 
-          for file_name, checks in file_text_checks.items():
-              text = (root / file_name).read_text(encoding='utf-8')
-              for token in checks:
-                  if token not in text:
-                      print(f'::error::{file_name} is missing expected token: {token}')
-                      sys.exit(1)
+          # patches-bundle.json is a release bundle and does not contain per-patch target metadata.
+          bundle_data = json.loads((root / 'patches-bundle.json').read_text(encoding='utf-8'))
+          if 'version' in bundle_data and not isinstance(bundle_data.get('version'), str):
+              print('::error::patches-bundle.json contains an invalid version field.')
+              sys.exit(1)
+
+          patches_md_text = (root / 'PATCHES.md').read_text(encoding='utf-8')
+          if not patches_md_text.strip().startswith('# Patches'):
+              print('::error::PATCHES.md does not start with the expected generated header.')
+              sys.exit(1)
+
+          # The generator's Markdown summary includes the total patch count; validate that count rather
+          # than requiring Telegraph package/version/versionCode tokens that are not emitted here.
+          expected_patch_count = len(patches)
+          if f'**{expected_patch_count} patches**' not in patches_md_text:
+              print(
+                  f'::error::PATCHES.md does not contain the expected generated patch count summary: {expected_patch_count} patches.'
+              )
+              sys.exit(1)
 
           # Reject old package names anywhere in generated metadata text.
           for file_name in ['patches-list.json', 'PATCHES.md', 'patches-bundle.json']:
