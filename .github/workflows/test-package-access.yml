@@ -1,20 +1,22 @@
-name: Test GitHub Packages access
+name: Final Telegraph generation and validation
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: read
 
 jobs:
-  test-package-access:
-    name: Test app.morphe.patches resolution
+  generate-validate-and-publish:
+    name: Generate patches, validate Telegraph metadata, then publish
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Java 17
         uses: actions/setup-java@v5
@@ -22,20 +24,160 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify token is available without printing it
+      - name: Verify GitHub auth variables are available
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
-          if [ -z "$GITHUB_TOKEN" ]; then
-            echo "::error::GITHUB_TOKEN is empty."
+          if [ -z "$GITHUB_TOKEN" ] || [ -z "$GITHUB_ACTOR" ]; then
+            echo "::error::Missing GITHUB_TOKEN or GITHUB_ACTOR."
             exit 1
           fi
-          echo "GITHUB_TOKEN is present (value hidden)."
+          echo "GitHub Packages authentication variables are present (values hidden)."
 
-      - name: Resolve Morphe Gradle plugin with GitHub Packages auth
+      - name: Run canonical Gradle generation task
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
-          ./gradlew help --no-daemon --stacktrace
+          ./gradlew generatePatchesList --no-daemon --stacktrace
+
+      - name: Validate generated artifacts and metadata
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path('.')
+          required_files = [
+              'patches-list.json',
+              'PATCHES.md',
+              'patches-bundle.json',
+              'SHA256SUMS.txt',
+          ]
+
+          missing = [p for p in required_files if not (root / p).exists()]
+          if missing:
+              print(f'::error::Missing required generated files: {", ".join(missing)}')
+              sys.exit(1)
+
+          data = json.loads((root / 'patches-list.json').read_text(encoding='utf-8'))
+          patches = data.get('patches', [])
+
+          if not patches:
+              print('::error::patches-list.json has no patches entries after generation.')
+              sys.exit(1)
+
+          all_compatible_packages = []
+          for patch in patches:
+              all_compatible_packages.extend(patch.get('compatiblePackages', []))
+
+          unique_packages = sorted({cp.get('packageName') for cp in all_compatible_packages if cp.get('packageName')})
+
+          print(f'Generated unique package names: {unique_packages}')
+
+          # Fail if any old target compatibility remains in generated metadata.
+          old_target_packages = ['org.telegram.messenger', 'org.telegram.messenger.web', 'org.telegram.plus']
+          offending = [cp for cp in all_compatible_packages if cp.get('packageName') in old_target_packages]
+          if offending:
+              bad = ', '.join(sorted({cp['packageName'] for cp in offending}))
+              print(f'::error::Legacy target compatibility still present in generated metadata: {bad}')
+              sys.exit(1)
+
+          # Ensure all remaining target compatibility entries are Telegraph-only.
+          non_telegraph = [cp for cp in all_compatible_packages if cp.get('packageName') not in ('ir.ilmili.telegraph',)]
+          if non_telegraph:
+              bad = ', '.join(sorted({cp['packageName'] for cp in non_telegraph if cp.get('packageName')}))
+              print(f'::error::Unexpected target compatibility packages remain in generated metadata: {bad}')
+              sys.exit(1)
+
+          telegraph_entries = [cp for cp in all_compatible_packages if cp.get('packageName') == 'ir.ilmili.telegraph']
+          if not telegraph_entries:
+              print('::error::No Telegraph target compatibility entries were found in patches-list.json.')
+              sys.exit(1)
+
+          expected_version = '12.10.1.0'
+          expected_version_code = 70382
+
+          for cp in telegraph_entries:
+              targets = cp.get('targets', [])
+              if not targets:
+                  print(f'::error::Telegraph entry for {cp.get("name")} has no targets in patches-list.json.')
+                  sys.exit(1)
+
+              for target in targets:
+                  version = target.get('version')
+                  if version != expected_version:
+                      print(f'::error::Unexpected Telegraph target version {version!r}; expected {expected_version!r}.')
+                      sys.exit(1)
+
+                  version_codes = target.get('versionCodes', {})
+                  if not version_codes:
+                      print('::error::Telegraph target has no versionCodes entries.')
+                      sys.exit(1)
+
+                  bad_codes = {arch: code for arch, code in version_codes.items() if int(code) != expected_version_code}
+                  if bad_codes:
+                      print(f'::error::Unexpected versionCode values for Telegraph target: {bad_codes}')
+                      sys.exit(1)
+
+          # Validate generated text files contain the exact current Telegraph target metadata.
+          file_text_checks = {
+              'PATCHES.md': ['ir.ilmili.telegraph', '12.10.1.0', '70382'],
+              'patches-list.json': ['ir.ilmili.telegraph', '12.10.1.0', '70382'],
+              'patches-bundle.json': ['ir.ilmili.telegraph', '12.10.1.0', '70382'],
+          }
+
+          for file_name, checks in file_text_checks.items():
+              text = (root / file_name).read_text(encoding='utf-8')
+              for token in checks:
+                  if token not in text:
+                      print(f'::error::{file_name} is missing expected token: {token}')
+                      sys.exit(1)
+
+          # Reject old package names anywhere in generated metadata text.
+          for file_name in ['patches-list.json', 'PATCHES.md', 'patches-bundle.json']:
+              text = (root / file_name).read_text(encoding='utf-8')
+              for old_name in ['org.telegram.messenger.web', 'org.telegram.plus', 'org.telegram.messenger']:
+                  if old_name in text:
+                      print(f'::error::{file_name} still contains legacy target compatibility string: {old_name}')
+                      sys.exit(1)
+
+          # Count final Telegraph patches.
+          telegram_patch_count = len(
+              [p for p in patches if any(cp.get('packageName') == 'ir.ilmili.telegraph' for cp in p.get('compatiblePackages', []))]
+          )
+
+          print(f'Final Telegram patch count: {telegram_patch_count}')
+          print('All required Telegraph target compatibility validations passed.')
+          PY
+
+      - name: Verify generated files changed
+        run: |
+          if [ -z "$(git status --porcelain -- patches-list.json PATCHES.md patches-bundle.json SHA256SUMS.txt)" ]; then
+            echo '::error::Generated artifacts did not change after running generation.'
+            exit 1
+          fi
+          echo 'Generated artifacts changed as expected.'
+
+      - name: Commit generated artifacts and source updates
+        run: |
+          git config user.name "smhmn2332"
+          git config user.email "smhmn2332@gmail.com"
+          git add patches-list.json PATCHES.md patches-bundle.json SHA256SUMS.txt patches/src/main/kotlin/app/template/patches/shared/Constants.kt
+          if git diff --cached --quiet; then
+            echo '::error::No staged changes were available to commit.'
+            exit 1
+          fi
+          git commit -m "chore: regenerate telegraph patch metadata"
+          git push origin HEAD:main
+
+      - name: Remove temporary workflow file after successful publish
+        if: success()
+        run: |
+          git rm -f .github/workflows/test-package-access.yml || true
+          git commit -am "chore: remove temporary generation workflow" || true
+          git push origin HEAD:main || true
