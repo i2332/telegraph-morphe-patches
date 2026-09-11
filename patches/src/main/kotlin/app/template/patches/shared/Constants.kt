@@ -1573,7 +1573,7 @@ val TELEGRAM_COMPATIBILITY = Compatibility(
         packageName = "ir.ilmili.telegraph",
         apkFileType = ApkFileType.XAPK,
         appIconColor = 0x2CA5E0,
-        targets = listOf(AppTarget(version = "12.10.0", versionCode = 70242))
+        targets = listOf(AppTarget(version = "12.10.1.0", versionCode = 70382))
     )
 
 val THE_ATHLETIC_COMPATIBILITY = Compatibility(
